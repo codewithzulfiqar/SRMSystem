@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ur" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Result Management System</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- html2pdf & Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; }
+        
+        .main-content { flex: 1; }
+
+        .result-card-container {
+            width: 210mm;
+            min-height: 290mm;
+            margin: 20px auto;
+            background: white;
+            padding: 12mm;
+            box-sizing: border-box;
+            border: 8px double #1e3a8a;
+            position: relative;
+        }
+
+        /* Active Tab Styling */
+        .tab-btn.active {
+            background-color: #1e3a8a !important;
+            color: white !important;
+            border-bottom: 4px solid #facc15;
+        }
+
+        /* Screen behavior: Toggle visibility based on view tab */
+        #printArea { display: none; }
+        .view-active #printArea { display: block; }
+
+        @media print {
+            /* Full Reset for Print */
+            body, html { background: white !important; padding: 0 !important; margin: 0 !important; }
+            .no-print, header, nav, footer, .tabs-container { display: none !important; }
+            
+            #appContainer { box-shadow: none !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
+            .tab-content { display: none !important; }
+            
+            /* Crucial: Ensure printArea is visible during print regardless of active tab class */
+            #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+            #allCardsContainer { display: block !important; }
+            
+            .page-break { page-break-after: always; display: block; }
+            .result-card-container { margin: 0 auto !important; border: 8px double #1e3a8a !important; box-shadow: none !important; }
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .chart-container { position: relative; height: 300px; width: 100%; }
+    </style>
+</head>
+<body class="p-2 md:p-8">
+
+<div id="appContainer" class="main-content max-w-6xl mx-auto w-full bg-white shadow-2xl rounded-2xl overflow-hidden no-print mb-10">
+    <header class="bg-blue-800 text-white p-6 text-center">
+        <h1 class="text-3xl font-bold">School Result Management System</h1>
+        <p class="mt-2 opacity-80 font-light">Comprehensive Student Performance Analytics</p>
+    </header>
+
+    <nav class="flex bg-blue-100 border-b overflow-x-auto tabs-container">
+        <button id="btn-setup-tab" onclick="showTab('setup-tab')" class="tab-btn px-6 py-3 font-semibold hover:bg-blue-200 transition">1. Setup</button>
+        <button id="btn-subjects-tab" onclick="showTab('subjects-tab')" class="tab-btn px-6 py-3 font-semibold hover:bg-blue-200 transition">2. Subjects</button>
+        <button id="btn-entry-tab" onclick="showTab('entry-tab')" class="tab-btn px-6 py-3 font-semibold hover:bg-blue-200 transition">3. Entry</button>
+        <button id="btn-view-tab" onclick="showTab('view-tab')" class="tab-btn px-6 py-3 font-semibold hover:bg-blue-200 transition">4. Results & Charts</button>
+    </nav>
+
+    <div class="p-6">
+        <!-- SETUP TAB -->
+        <div id="setup-tab" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4 text-blue-800 border-b pb-2">School Settings</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block mb-1 font-medium">School Name</label>
+                    <input type="text" id="schoolName" placeholder="Enter school name" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block mb-1 font-medium">School Logo</label>
+                    <input type="file" id="schoolLogoInput" accept="image/*" class="w-full border p-1 rounded">
+                </div>
+                <div>
+                    <label class="block mb-1 font-medium">Exam Year</label>
+                    <input type="text" id="examYear" placeholder="e.g. 2024-25" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block mb-1 font-medium">Type of Examination</label>
+                    <select id="examType" onchange="toggleHourlyOptions()" class="w-full border p-2 rounded">
+                        <option value="Annual Examination">Annual</option>
+                        <option value="Mid-term Examination">Mid-term</option>
+                        <option value="Hourly">Hourly</option>
+                    </select>
+                </div>
+                <div id="hourlyContainer" class="hidden">
+                    <label class="block mb-1 font-medium">Select Hourly Session</label>
+                    <select id="hourlyType" class="w-full border p-2 rounded bg-blue-50">
+                        <option value="1st Hourly Examination">1st Hourly Examination</option>
+                        <option value="2nd Hourly Examination">2nd Hourly Examination</option>
+                        <option value="3rd Hourly Examination">3rd Hourly Examination</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="saveSetup()" class="mt-6 bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700">Save & Continue</button>
+        </div>
+
+        <!-- SUBJECTS TAB -->
+        <div id="subjects-tab" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4 text-blue-800 border-b pb-2">Subject Management</h2>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 bg-blue-50 p-4 rounded">
+                <div>
+                    <label class="block text-xs font-bold mb-1">Subject Name</label>
+                    <input type="text" id="subjectName" placeholder="e.g. English" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1">Class / Grade</label>
+                    <input type="text" id="subjectClass" placeholder="e.g. 10th" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1">Max Marks</label>
+                    <input type="number" id="maxMarks" placeholder="Total" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold mb-1">Pass Marks</label>
+                    <input type="number" id="passMarks" placeholder="Passing" class="w-full border p-2 rounded">
+                </div>
+                <div class="flex items-end">
+                    <button onclick="addSubject()" class="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700 transition">Add Subject</button>
+                </div>
+            </div>
+            <div id="subjectsList" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- ENTRY TAB -->
+        <div id="entry-tab" class="tab-content">
+            <h2 class="text-2xl font-bold mb-4 text-blue-800 border-b pb-2">Student Entry</h2>
+            <p class="text-sm text-gray-500 mb-4 italic">Note: Enter Class name to filter relevant subjects.</p>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <input type="text" id="stdName" placeholder="Student Name" class="border p-2 rounded">
+                <input type="text" id="stdFather" placeholder="Father's Name" class="border p-2 rounded">
+                <input type="text" id="stdRoll" placeholder="Roll No" class="border p-2 rounded">
+                <input type="text" id="stdClass" oninput="generateMarksInputs()" placeholder="Class (e.g. 10th)" class="border p-2 rounded bg-yellow-50 focus:bg-white transition-all">
+            </div>
+            <div class="mb-4">
+                <input type="date" id="resultDate" class="border p-2 rounded">
+            </div>
+            <div id="marksInputArea" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"></div>
+            <button onclick="saveStudent()" class="bg-blue-800 text-white px-8 py-3 rounded">Save Result</button>
+        </div>
+
+        <!-- VIEW TAB -->
+        <div id="view-tab" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+                <div class="bg-white p-4 rounded-xl border shadow-sm">
+                    <h3 class="font-bold text-gray-700 mb-4">Class Performance (Marks Comparison)</h3>
+                    <div class="chart-container">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border shadow-sm">
+                    <h3 class="font-bold text-gray-700 mb-4">Pass vs Fail Distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="passFailChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-4 mb-6 border-t pt-6">
+                <button onclick="handlePrint()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-bold">🖨️ Print All Cards</button>
+                <button onclick="downloadAllCards()" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700 font-bold">📄 Download PDF</button>
+                <button onclick="deleteAllData()" class="bg-red-500 text-white px-6 py-2 rounded hover:bg-red-600 font-bold">🗑️ Reset Data</button>
+            </div>
+
+            <!-- RESULT CARDS SECTION -->
+            <div id="printArea" class="mt-8 border-t-2 pt-8">
+                <h3 class="text-xl font-bold mb-6 text-gray-400 no-print text-center uppercase tracking-widest italic">Result Cards Preview</h3>
+                <div id="allCardsContainer"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<footer class="no-print w-full max-w-6xl mx-auto mt-auto py-6 text-center border-t border-gray-200">
+    <div class="flex flex-col md:flex-row justify-center items-center gap-2 md:gap-6">
+        <p class="text-gray-600 text-sm font-medium">
+            Designed & Developed by <span class="text-blue-800 font-bold">Zulfiqar Ali Jokhio</span>
+        </p>
+        <div class="hidden md:block w-px h-4 bg-gray-300"></div>
+        <p class="text-gray-600 text-sm">
+            For support & queries: <a href="tel:+923123477418" class="text-blue-700 hover:underline font-semibold">+92 312 3477418</a>
+        </p>
+    </div>
+    <p class="text-gray-400 text-[10px] mt-2 tracking-widest uppercase">© 2026 School Result Management System</p>
+</footer>
+
+<script>
+    let schoolData = JSON.parse(localStorage.getItem('schoolSetup')) || { name: '', logo: '', examYear: '', examType: 'Annual Examination' };
+    let subjects = JSON.parse(localStorage.getItem('subjects')) || [];
+    let students = JSON.parse(localStorage.getItem('students')) || [];
+    let currentLogoBase64 = schoolData.logo || '';
+    let performanceChart, passFailChart;
+
+    window.onload = () => {
+        if(schoolData.name) document.getElementById('schoolName').value = schoolData.name;
+        if(schoolData.examYear) document.getElementById('examYear').value = schoolData.examYear;
+        
+        const et = schoolData.examType || 'Annual Examination';
+        if (et.includes('Hourly')) {
+            document.getElementById('examType').value = 'Hourly';
+            document.getElementById('hourlyType').value = et;
+            toggleHourlyOptions();
+        } else {
+            document.getElementById('examType').value = et;
+        }
+
+        document.getElementById('resultDate').valueAsDate = new Date();
+        renderSubjects();
+        renderSummary();
+        
+        // Ensure starting tab is highlighted correctly
+        showTab('setup-tab');
+    };
+
+    function toggleHourlyOptions() {
+        const type = document.getElementById('examType').value;
+        const container = document.getElementById('hourlyContainer');
+        if (type === 'Hourly') {
+            container.classList.remove('hidden');
+        } else {
+            container.classList.add('hidden');
+        }
+    }
+
+    function showTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('btn-' + tabId).classList.add('active');
+
+        if(tabId === 'view-tab') {
+            document.body.classList.add('view-active');
+            renderSummary();
+        } else {
+            document.body.classList.remove('view-active');
+        }
+
+        if(tabId === 'entry-tab') generateMarksInputs();
+    }
+
+    document.getElementById('schoolLogoInput').addEventListener('change', function(e) {
+        const reader = new FileReader();
+        reader.onload = function() { currentLogoBase64 = reader.result; }
+        reader.readAsDataURL(e.target.files[0]);
+    });
+
+    function saveSetup() {
+        let finalExamType = document.getElementById('examType').value;
+        if (finalExamType === 'Hourly') {
+            finalExamType = document.getElementById('hourlyType').value;
+        }
+
+        schoolData = { 
+            name: document.getElementById('schoolName').value, 
+            logo: currentLogoBase64,
+            examYear: document.getElementById('examYear').value,
+            examType: finalExamType
+        };
+        localStorage.setItem('schoolSetup', JSON.stringify(schoolData));
+        alert("Setup Saved Successfully!");
+        renderSummary();
+    }
+
+    function addSubject() {
+        const name = document.getElementById('subjectName').value;
+        const sClass = document.getElementById('subjectClass').value;
+        const max = parseInt(document.getElementById('maxMarks').value);
+        const pass = parseInt(document.getElementById('passMarks').value);
+        if(!name || isNaN(max)) return alert("Please fill at least Subject Name and Max Marks");
+        
+        subjects.push({ id: Date.now(), name, class: sClass, max, pass });
+        localStorage.setItem('subjects', JSON.stringify(subjects));
+        
+        document.getElementById('subjectName').value = '';
+        document.getElementById('subjectClass').value = '';
+        document.getElementById('maxMarks').value = '';
+        document.getElementById('passMarks').value = '';
+        
+        renderSubjects();
+    }
+
+    function renderSubjects() {
+        const list = document.getElementById('subjectsList');
+        list.innerHTML = subjects.map(s => `
+            <span class="inline-flex items-center bg-blue-50 border border-blue-200 px-3 py-1 rounded-full text-sm font-medium text-blue-800">
+                ${s.name} ${s.class ? `<span class="text-xs opacity-60 ml-1">[${s.class}]</span>` : ''} 
+                <span class="ml-2 opacity-50">(${s.max})</span>
+                <button onclick="deleteSub(${s.id})" class="ml-2 text-red-500 hover:text-red-700 font-bold">×</button>
+            </span>
+        `).join('');
+    }
+
+    function deleteSub(id) {
+        subjects = subjects.filter(s => s.id !== id);
+        localStorage.setItem('subjects', JSON.stringify(subjects));
+        renderSubjects();
+    }
+
+    function generateMarksInputs() {
+        const area = document.getElementById('marksInputArea');
+        const classFilter = document.getElementById('stdClass').value.trim().toLowerCase();
+        
+        if(subjects.length === 0) {
+            area.innerHTML = '<p class="col-span-full text-center text-gray-500 py-4">No subjects added yet.</p>';
+            return;
+        }
+
+        const filteredSubjects = classFilter === "" 
+            ? subjects 
+            : subjects.filter(s => (s.class || "").toLowerCase() === classFilter);
+
+        if(filteredSubjects.length === 0) {
+            area.innerHTML = `<p class="col-span-full text-center text-orange-600 py-4 font-semibold">No subjects found for Class "${classFilter}".</p>`;
+            return;
+        }
+
+        area.innerHTML = filteredSubjects.map(s => `
+            <div class="border p-2 rounded bg-white shadow-sm border-blue-100">
+                <label class="block text-xs font-bold text-gray-600">${s.name} ${s.class ? `(${s.class})` : ''}</label>
+                <input type="number" data-sub-id="${s.id}" class="std-mark-input w-full p-1 border rounded mt-1" placeholder="Max ${s.max}">
+            </div>
+        `).join('');
+    }
+
+    function saveStudent() {
+        const name = document.getElementById('stdName').value;
+        const father = document.getElementById('stdFather').value;
+        const roll = document.getElementById('stdRoll').value;
+        const sClass = document.getElementById('stdClass').value;
+        const sDate = document.getElementById('resultDate').value;
+        
+        if(!name || !roll) return alert("Student Name and Roll No are required");
+
+        let marks = [];
+        let tMax = 0, tObt = 0, failed = false;
+
+        const markInputs = document.querySelectorAll('.std-mark-input');
+        if(markInputs.length === 0) return alert("Please specify a class with subjects before saving.");
+
+        markInputs.forEach(input => {
+            const sub = subjects.find(s => s.id == input.getAttribute('data-sub-id'));
+            const val = parseInt(input.value) || 0;
+            if(val < (sub.pass || 0)) failed = true;
+            marks.push({ subjectName: sub.name, max: sub.max, obtained: val, pass: sub.pass });
+            tMax += sub.max; tObt += val;
+        });
+
+        students.push({
+            id: Date.now(), name, father, roll, sClass, sDate,
+            marks, tMax, tObt,
+            percentage: ((tObt/tMax)*100).toFixed(1),
+            result: failed ? 'FAIL' : 'PASS',
+            examInfo: { year: schoolData.examYear, type: schoolData.examType }
+        });
+
+        localStorage.setItem('students', JSON.stringify(students));
+        alert("Student Record Saved!");
+        
+        document.getElementById('stdName').value = '';
+        document.getElementById('stdFather').value = '';
+        document.getElementById('stdRoll').value = '';
+        document.getElementById('stdClass').value = '';
+        document.getElementById('marksInputArea').innerHTML = '';
+        showTab('view-tab');
+    }
+
+    function renderSummary() {
+        const cardsCont = document.getElementById('allCardsContainer');
+        if (students.length === 0) {
+            cardsCont.innerHTML = '<p class="text-center text-gray-400 py-10">No students recorded yet.</p>';
+            return;
+        }
+        cardsCont.innerHTML = students.map(s => generateResultCardHTML(s)).join('');
+        updateCharts();
+    }
+
+    function updateCharts() {
+        if(performanceChart) performanceChart.destroy();
+        if(passFailChart) passFailChart.destroy();
+        if(students.length === 0) return;
+
+        const ctxBar = document.getElementById('performanceChart').getContext('2d');
+        performanceChart = new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: students.map(s => s.name),
+                datasets: [{ label: 'Obtained', data: students.map(s => s.tObt), backgroundColor: '#1e3a8a', borderRadius: 5 }, { label: 'Total', data: students.map(s => s.tMax), backgroundColor: '#e2e8f0', borderRadius: 5 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+
+        const passCount = students.filter(s => s.result === 'PASS').length;
+        const failCount = students.length - passCount;
+        const ctxPie = document.getElementById('passFailChart').getContext('2d');
+        passFailChart = new Chart(ctxPie, {
+            type: 'doughnut',
+            data: { labels: ['Pass', 'Fail'], datasets: [{ data: [passCount, failCount], backgroundColor: ['#10b981', '#ef4444'] }] },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+    }
+
+    function generateResultCardHTML(s) {
+        const date = new Date(s.sDate).toLocaleDateString();
+        const examLabel = s.examInfo ? `${s.examInfo.type} - ${s.examInfo.year}` : `${schoolData.examType} - ${schoolData.examYear}`;
+
+        return `
+            <div class="result-card-container page-break shadow-sm">
+                <div class="flex justify-between items-center border-b-4 border-blue-900 pb-2 mb-4">
+                    ${schoolData.logo ? `<img src="${schoolData.logo}" style="height: 60px; max-width: 150px; object-fit: contain;">` : '<div></div>'}
+                    <div class="text-center flex-1">
+                        <h1 class="text-2xl font-bold uppercase text-blue-900">${schoolData.name || 'SCHOOL NAME'}</h1>
+                        <h2 class="text-sm font-bold text-gray-500 tracking-widest mt-1">${examLabel}</h2>
+                    </div>
+                    <div class="w-10"></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-x-10 gap-y-2 mb-4 text-xs bg-gray-50 p-4 rounded">
+                    <div class="flex border-b border-gray-200"><span class="w-24 font-bold text-blue-900">Student:</span><span class="flex-1 font-semibold">${s.name}</span></div>
+                    <div class="flex border-b border-gray-200"><span class="w-24 font-bold text-blue-900">Roll No:</span><span class="flex-1 font-semibold">${s.roll}</span></div>
+                    <div class="flex border-b border-gray-200"><span class="w-24 font-bold text-blue-900">Father:</span><span class="flex-1 font-semibold">${s.father}</span></div>
+                    <div class="flex border-b border-gray-200"><span class="w-24 font-bold text-blue-900">Class:</span><span class="flex-1 font-semibold">${s.sClass}</span></div>
+                    <div class="flex border-b border-gray-200"><span class="w-24 font-bold text-blue-900">Date:</span><span class="flex-1 font-semibold">${date}</span></div>
+                </div>
+
+                <table class="w-full border-collapse border-2 border-gray-800 mb-6 text-sm">
+                    <thead>
+                        <tr class="bg-blue-900 text-white">
+                            <th class="border border-gray-800 p-2 text-left">Subject</th>
+                            <th class="border border-gray-800 p-2 text-center">Max Marks</th>
+                            <th class="border border-gray-800 p-2 text-center">Obtained</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${s.marks.map(m => `
+                            <tr>
+                                <td class="border border-gray-800 p-2 font-medium">${m.subjectName}</td>
+                                <td class="border border-gray-800 p-2 text-center">${m.max}</td>
+                                <td class="border border-gray-800 p-2 text-center font-bold ${m.obtained < m.pass ? 'text-red-600' : ''}">${m.obtained}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tr class="bg-blue-50 font-black">
+                        <td class="border border-gray-800 p-2 text-right">TOTAL</td>
+                        <td class="border border-gray-800 p-2 text-center">${s.tMax}</td>
+                        <td class="border border-gray-800 p-2 text-center text-blue-900">${s.tObt}</td>
+                    </tr>
+                </table>
+
+                <div class="grid grid-cols-3 gap-4 mb-10">
+                    <div class="border p-2 rounded text-center"><p class="text-[9px] uppercase font-bold text-gray-400">Percentage</p><p class="text-xl font-black">${s.percentage}%</p></div>
+                    <div class="border p-2 rounded text-center bg-blue-900 text-white"><p class="text-[9px] uppercase font-bold">Result Status</p><p class="text-xl font-black">${s.result}</p></div>
+                    <div class="border p-2 rounded text-center"><p class="text-[9px] uppercase font-bold text-gray-400">Grade</p><p class="text-xl font-black">${s.percentage > 80 ? 'A+' : s.percentage > 70 ? 'A' : s.percentage > 60 ? 'B' : s.percentage > 50 ? 'C' : 'D'}</p></div>
+                </div>
+
+                <div class="flex justify-between mt-auto pt-10">
+                    <div class="border-t border-gray-800 w-32 pt-1 text-[10px] text-center font-bold">TEACHER</div>
+                    <div class="border-t border-gray-800 w-32 pt-1 text-[10px] text-center font-bold">PRINCIPAL</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function handlePrint() {
+        if(students.length === 0) {
+            alert("No data to print!");
+            return;
+        }
+        window.print();
+    }
+
+    function downloadAllCards() {
+        const element = document.getElementById('allCardsContainer');
+        if(students.length === 0) {
+            alert("No data to download!");
+            return;
+        }
+        html2pdf().from(element).set({
+            margin: 0,
+            filename: `Results_${schoolData.examYear || 'Report'}.pdf`,
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        }).save();
+    }
+
+    function deleteAllData() {
+        if(confirm("Erase all data? This cannot be undone.")) { 
+            localStorage.clear(); 
+            location.reload(); 
+        }
+    }
+</script>
+</body>
+</html>
